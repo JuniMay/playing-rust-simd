@@ -1,6 +1,6 @@
 #![feature(portable_simd)]
 
-use std::simd::{f32x64, Mask};
+use std::simd::{Mask, Simd};
 
 use rand::Rng;
 use rayon::{
@@ -57,12 +57,12 @@ fn matmul_iterator(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: u
     }
 }
 
+const SIMD_WIDTH: usize = 32;
+
 /// Portable SIMD
 ///
 /// This is a SIMD version of the matrix multiplication, and uses the `std::simd` module.
 fn matmul_simd(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
-    const SIMD_WIDTH: usize = 64;
-
     for i in 0..m {
         for l in 0..k {
             let a_il = a[i * k + l];
@@ -71,9 +71,9 @@ fn matmul_simd(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize
 
             let mut j = 0;
             while j < n {
-                let c_ij = f32x64::load_or_default(&c_row[j..]);
-                let b_lj = f32x64::load_or_default(&b_ln[j..]);
-                let result = c_ij + b_lj * f32x64::splat(a_il);
+                let c_ij = Simd::<f32, SIMD_WIDTH>::load_or_default(&c_row[j..]);
+                let b_lj = Simd::<f32, SIMD_WIDTH>::load_or_default(&b_ln[j..]);
+                let result = c_ij + b_lj * Simd::<f32, SIMD_WIDTH>::splat(a_il);
                 // if the element is out of bounds, store_select will ignore it
                 result.store_select(&mut c_row[j..], Mask::splat(true));
                 j += SIMD_WIDTH;
@@ -110,7 +110,7 @@ fn matmul_parallelized_autovectorize(
 }
 
 /// Parallelized
-/// 
+///
 /// This is a parallelized version of the matrix multiplication, and uses SIMD in the inner loop.
 fn matmul_parallelized(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
     c.par_chunks_mut(n)
@@ -121,20 +121,19 @@ fn matmul_parallelized(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, 
                 let a_il = a[i * k + l];
                 let b_ln = &b[l * n..(l + 1) * n];
 
-                let simd_width = 64;
                 let mut j = 0;
 
-                let num_simd = n / simd_width;
-                let num_scalar = n % simd_width;
+                let num_simd = n / SIMD_WIDTH;
+                let num_scalar = n % SIMD_WIDTH;
 
                 for _ in 0..num_simd {
                     // if using `load_or_default` and remove the upper boundary, the performance
                     // will be even worse than non-paralleled version
-                    let c_ij = f32x64::from_slice(&row[j..j + simd_width]);
-                    let b_lj = f32x64::from_slice(&b_ln[j..j + simd_width]);
-                    let result = c_ij + b_lj * f32x64::splat(a_il);
-                    result.store_select(&mut row[j..j + simd_width], Mask::splat(true));
-                    j += simd_width;
+                    let c_ij = Simd::<f32, SIMD_WIDTH>::from_slice(&row[j..j + SIMD_WIDTH]);
+                    let b_lj = Simd::<f32, SIMD_WIDTH>::from_slice(&b_ln[j..j + SIMD_WIDTH]);
+                    let result = c_ij + b_lj * Simd::<f32, SIMD_WIDTH>::splat(a_il);
+                    result.store_select(&mut row[j..j + SIMD_WIDTH], Mask::splat(true));
+                    j += SIMD_WIDTH;
                 }
 
                 for _ in 0..num_scalar {
@@ -217,6 +216,7 @@ fn main() {
         "Iterator: {:.6} s, {:.6} GFLOPS",
         perf_iterator.0, perf_iterator.1
     );
+    println!("SIMD width: {}", SIMD_WIDTH);
     println!("SIMD: {:.6} s, {:.6} GFLOPS", perf_simd.0, perf_simd.1);
     println!("Rayon threads: {}", rayon::current_num_threads());
     println!(
