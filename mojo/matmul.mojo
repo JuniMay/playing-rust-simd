@@ -21,6 +21,7 @@ from algorithm import Static2DTileUnitFunc as Tile2DFunc
 from algorithm import parallelize, vectorize
 from memory import memset_zero
 from python import Python
+from sys.info import num_performance_cores, num_logical_cores
 
 alias M = 512  # rows of A and C
 alias N = 4096  # cols of B and C
@@ -33,6 +34,7 @@ alias nelts = simdwidthof[type]() * 2
 alias tile_n = 64  # N must be a multiple of this
 alias tile_k = 4  # K must be a multiple of this
 
+var num_workers = 4
 
 struct Matrix[rows: Int, cols: Int]:
     var data: DTypePointer[type]
@@ -122,7 +124,7 @@ fn matmul_parallelized(inout C: Matrix, A: Matrix, B: Matrix):
 
             vectorize[dot, nelts, size = C.cols]()
 
-    parallelize[calc_row](C.rows, C.rows)
+    parallelize[calc_row](C.rows, num_workers)
 
 
 # Perform 2D tiling on the iteration space defined by end_x and end_y
@@ -153,7 +155,7 @@ fn matmul_tiled(inout C: Matrix, A: Matrix, B: Matrix):
 
         tile[calc_tile, tile_n, tile_k](C.cols, B.rows)
 
-    parallelize[calc_row](C.rows, C.rows)
+    parallelize[calc_row](C.rows, num_workers)
 
 
 # Unroll the vectorized loop by a constant factor
@@ -180,7 +182,7 @@ fn matmul_unrolled(inout C: Matrix, A: Matrix, B: Matrix):
 
         tile[calc_tile, tile_n, tile_k](C.cols, B.rows)
 
-    parallelize[calc_row](C.rows, C.rows)
+    parallelize[calc_row](C.rows, num_workers)
 
 
 @always_inline
@@ -252,6 +254,11 @@ fn test_all() raises:
 
 
 fn main() raises:
+    # num_workers = num_logical_cores()
+    num_workers = num_performance_cores()
+
+    print("Num Workers: ", num_workers)
+
     constrained[N % tile_n == 0, "N must be a multiple of tile_n"]()
     constrained[K % tile_k == 0, "K must be a multiple of tile_k"]()
 

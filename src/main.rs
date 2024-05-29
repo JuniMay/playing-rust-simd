@@ -8,6 +8,10 @@ use rayon::{
     slice::ParallelSliceMut,
 };
 
+/// Naive matrix multiplication
+///
+/// This does not utilize any optimization techniques, and is really slow.
+#[allow(unused)]
 fn matmul_naive(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
     for i in 0..m {
         for j in 0..n {
@@ -18,6 +22,12 @@ fn matmul_naive(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usiz
     }
 }
 
+/// Loop interchange
+///
+/// This is a simple optimization technique that can improve cache locality.
+///
+/// Rust compiler actually do auto-vectorization for this code, so the performance is similar to
+/// the iterator version.
 fn matmul_loop_interchange(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
     for i in 0..m {
         for l in 0..k {
@@ -28,6 +38,9 @@ fn matmul_loop_interchange(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usi
     }
 }
 
+/// Iterator
+///
+/// This utilize re-slicing and iterator to improve speed.
 fn matmul_iterator(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
     for i in 0..m {
         // c[i, j] += a[i, l] * b[l, j] for all l
@@ -44,6 +57,9 @@ fn matmul_iterator(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: u
     }
 }
 
+/// Portable SIMD
+///
+/// This is a SIMD version of the matrix multiplication, and uses the `std::simd` module.
 fn matmul_simd(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
     const SIMD_WIDTH: usize = 64;
 
@@ -66,6 +82,10 @@ fn matmul_simd(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize
     }
 }
 
+/// Parallelized & autovectorize
+///
+/// This is a parallelized version of the matrix multiplication, and uses iterator in the
+/// inner loop.
 fn matmul_parallelized_autovectorize(
     a: &[f32],
     b: &[f32],
@@ -89,6 +109,9 @@ fn matmul_parallelized_autovectorize(
         })
 }
 
+/// Parallelized
+/// 
+/// This is a parallelized version of the matrix multiplication, and uses SIMD in the inner loop.
 fn matmul_parallelized(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
     c.par_chunks_mut(n)
         .take(m)
@@ -105,8 +128,8 @@ fn matmul_parallelized(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, 
                 let num_scalar = n % simd_width;
 
                 for _ in 0..num_simd {
-                    // if using `load_or_default` and remove the upper boundary,
-                    // rayon will not parallelize the loop, not sure why
+                    // if using `load_or_default` and remove the upper boundary, the performance
+                    // will be even worse than non-paralleled version
                     let c_ij = f32x64::from_slice(&row[j..j + simd_width]);
                     let b_lj = f32x64::from_slice(&b_ln[j..j + simd_width]);
                     let result = c_ij + b_lj * f32x64::splat(a_il);
@@ -157,7 +180,7 @@ fn main() {
     let m = 512;
     let n = 4096;
     let k = 512;
-    let perf_naive = benchmark(matmul_naive, num_iterations, warmup_iterations, m, n, k);
+    // let perf_naive = benchmark(matmul_naive, num_iterations, warmup_iterations, m, n, k);
     let perf_loop_interchange = benchmark(
         matmul_loop_interchange,
         num_iterations,
@@ -185,7 +208,7 @@ fn main() {
         k,
     );
 
-    println!("Naive: {:.6} s, {:.6} GFLOPS", perf_naive.0, perf_naive.1);
+    // println!("Naive: {:.6} s, {:.6} GFLOPS", perf_naive.0, perf_naive.1);
     println!(
         "Loop interchange: {:.6} s, {:.6} GFLOPS",
         perf_loop_interchange.0, perf_loop_interchange.1
