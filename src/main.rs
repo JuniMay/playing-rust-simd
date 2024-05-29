@@ -180,7 +180,7 @@ fn main() {
     let m = 512;
     let n = 4096;
     let k = 512;
-    // let perf_naive = benchmark(matmul_naive, num_iterations, warmup_iterations, m, n, k);
+    let perf_naive = benchmark(matmul_naive, num_iterations, warmup_iterations, m, n, k);
     let perf_loop_interchange = benchmark(
         matmul_loop_interchange,
         num_iterations,
@@ -208,7 +208,7 @@ fn main() {
         k,
     );
 
-    // println!("Naive: {:.6} s, {:.6} GFLOPS", perf_naive.0, perf_naive.1);
+    println!("Naive: {:.6} s, {:.6} GFLOPS", perf_naive.0, perf_naive.1);
     println!(
         "Loop interchange: {:.6} s, {:.6} GFLOPS",
         perf_loop_interchange.0, perf_loop_interchange.1
